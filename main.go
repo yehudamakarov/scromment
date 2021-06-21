@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	fileLocationPtr := flag.String("file location", "", "location of the sql file that needs to be handled")
-	outLocationPtr := flag.String("out location", "", "location of the generated sql file (that will be commented appropriately)")
+	fileLocationPtr := flag.String("file-location", "", "location of the sql file that needs to be handled")
+	outLocationPtr := flag.String("out-location", "", "location of the generated sql file (that will be commented appropriately)")
 	commentablePtr := flag.String("commentable", "", "text token that must be contained in an object for this tool to comment it out")
 	splitterPtr := flag.String("splitter", "/****** Object:", "text token that dictates when to split objects to be commented out when containing a commentable. \n defaults to: /****** Object: for sql server's exported scripts")
 
@@ -42,18 +42,18 @@ func main() {
 }
 
 func handleCliErrors(fileLocation string, outLocation string, commentable string, splitter string) {
-	msg := "please specify the "
+	msg := "please specify the | "
 	if fileLocation == "" {
 		msg = msg + "file location "
 	}
 	if outLocation == "" {
-		msg = msg + "out file location "
+		msg = msg + "| out file location "
 	}
 	if commentable == "" {
-		msg = msg + "commentable "
+		msg = msg + "| commentable "
 	}
 	if splitter == "" {
-		msg = msg + "splitter"
+		msg = msg + "| splitter "
 	}
 	msg = msg + "argument(s)"
 	log.Fatal(msg)
