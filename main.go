@@ -43,20 +43,27 @@ func main() {
 
 func handleCliErrors(fileLocation string, outLocation string, commentable string, splitter string) {
 	msg := "please specify the | "
+	shouldThrow := false
 	if fileLocation == "" {
 		msg = msg + "file location "
+		shouldThrow = true
 	}
 	if outLocation == "" {
 		msg = msg + "| out file location "
+		shouldThrow = true
 	}
 	if commentable == "" {
 		msg = msg + "| commentable "
+		shouldThrow = true
 	}
 	if splitter == "" {
 		msg = msg + "| splitter "
+		shouldThrow = true
 	}
 	msg = msg + "argument(s)"
-	log.Fatal(msg)
+	if shouldThrow {
+		log.Fatal(msg)
+	}
 }
 
 func rewriteFile(file *os.File, splitter string, commentable string, out *os.File) {
