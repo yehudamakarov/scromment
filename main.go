@@ -73,11 +73,11 @@ func rewriteFile(file *os.File, splitter string, commentable string, out *os.Fil
 	for scanner.Scan() {
 		line := scanner.Text()
 		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
-			currentHeader = line + "\n"
 			if sb.Len() > 0 {
 				handleChunkedObject(sb, commentable, currentHeader, out)
 				sb.Reset()
 			}
+			currentHeader = line + "\n"
 		} else {
 			sb.WriteString(line + "\n")
 		}
