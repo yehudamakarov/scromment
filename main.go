@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"flag"
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 	"log"
 	"os"
 	"strings"
@@ -67,11 +69,24 @@ func handleCliErrors(fileLocation string, outLocation string, commentable string
 }
 
 func rewriteFile(file *os.File, splitter string, commentable string, out *os.File) {
-	scanner := bufio.NewScanner(file)
+
+	b := make([]byte, 2)
+	_, err := file.Read(b)
+	check(err)
+	var decoder transform.Transformer
+	if (b[0] == 255 && b[1] == 254) || (b[0] == 254 && b[1] == 255) {
+		decoder = unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder()
+	} else {
+		decoder = unicode.UTF8.NewDecoder()
+	}
+
+	scanner := bufio.NewScanner(transform.NewReader(file, decoder))
+	check(err)
 	sb := strings.Builder{}
 	var currentHeader string
 	for scanner.Scan() {
 		line := scanner.Text()
+
 		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
 			if sb.Len() > 0 {
 				handleChunkedObject(sb, commentable, currentHeader, out)
@@ -89,7 +104,7 @@ func rewriteFile(file *os.File, splitter string, commentable string, out *os.Fil
 
 func handleChunkedObject(sb strings.Builder, commentable string, currentHeader string, out *os.File) {
 	content := sb.String()
-	needsCommenting := strings.Contains(content, commentable)
+	needsCommenting := strings.Contains(strings.ToLower(content), strings.ToLower(commentable))
 
 	if needsCommenting {
 		currentHeader = "--Needed Commenting ----- " + currentHeader
