@@ -14,7 +14,7 @@ func main() {
 	fileLocationPtr := flag.String("file-location", "", "location of the sql file that needs to be handled")
 	outLocationPtr := flag.String("out-location", "", "location of the generated sql file (that will be commented appropriately)")
 	commentablePtr := flag.String("commentable", "", "text token that must be contained in an object for this tool to comment it out")
-	splitterPtr := flag.String("splitter", "/****** Object:", "text token that dictates when to split objects to be commented out when containing a commentable. \n defaults to: /****** Object: for sql server's exported scripts")
+	splitterPtr := flag.String("splitter", "/****** Object:", "text token that dictates when to split objects to be commented out when containing a commentable.")
 
 	flag.Parse()
 
@@ -44,32 +44,72 @@ func main() {
 }
 
 func handleCliErrors(fileLocation string, outLocation string, commentable string, splitter string) {
-	msg := "please specify the | "
-	shouldThrow := false
+
 	if fileLocation == "" {
-		msg = msg + "file location "
-		shouldThrow = true
+		showErrorMessage("file-location")
 	}
 	if outLocation == "" {
-		msg = msg + "| out file location "
-		shouldThrow = true
+		showErrorMessage("out-location")
 	}
 	if commentable == "" {
-		msg = msg + "| commentable "
-		shouldThrow = true
+		showErrorMessage("commentable")
 	}
 	if splitter == "" {
-		msg = msg + "| splitter "
-		shouldThrow = true
-	}
-	msg = msg + "argument(s)"
-	if shouldThrow {
-		log.Fatal(msg)
+		showErrorMessage("splitter")
 	}
 }
 
-func rewriteFile(file *os.File, splitter string, commentable string, out *os.File) {
+func showErrorMessage(missing string) {
+	log.Fatalf("don't forget %s!", missing)
+}
 
+type chunk struct {
+	shouldComment bool
+	header        string
+	sb            *strings.Builder
+}
+
+func (c *chunk) addContent(s string, commentable string) {
+	if strings.Contains(strings.ToLower(s), strings.ToLower(commentable)) && !strings.HasPrefix(strings.TrimSpace(s), "--") {
+		c.shouldComment = true
+	}
+	c.sb.WriteString(s)
+	c.sb.WriteString("\n")
+}
+
+func rewriteFile(file *os.File, splitter string, commentable string, out *os.File) {
+	decoder := getDecoder(file)
+	scanner := bufio.NewScanner(transform.NewReader(file, decoder))
+	iterate(scanner, splitter, commentable, out)
+}
+
+func iterate(scanner *bufio.Scanner, splitter string, commentable string, out *os.File) {
+	c := chunk{sb: &strings.Builder{}}
+	scanner.Scan()
+	firstLine := scanner.Text()
+	if strings.HasPrefix(firstLine, splitter) {
+		c.header = firstLine
+	} else {
+		c.addContent(firstLine, commentable)
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
+			writeChunk(c, out)
+			c = chunk{sb: &strings.Builder{}, header: line}
+		} else {
+			c.addContent(line, commentable)
+		}
+	}
+
+	// write contents after last header
+	if c.sb.Len() > 0 {
+		writeChunk(c, out)
+	}
+}
+
+func getDecoder(file *os.File) transform.Transformer {
 	b := make([]byte, 2)
 	_, err := file.Read(b)
 	check(err)
@@ -79,48 +119,29 @@ func rewriteFile(file *os.File, splitter string, commentable string, out *os.Fil
 	} else {
 		decoder = unicode.UTF8.NewDecoder()
 	}
-
-	scanner := bufio.NewScanner(transform.NewReader(file, decoder))
+	_, err = file.Seek(0, 0)
 	check(err)
-	sb := strings.Builder{}
-	var currentHeader string
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
-			if sb.Len() > 0 {
-				handleChunkedObject(sb, commentable, currentHeader, out)
-				sb.Reset()
-			}
-			currentHeader = line + "\n"
-		} else {
-			sb.WriteString(line + "\n")
-		}
-	}
-	if sb.Len() > 0 {
-		handleChunkedObject(sb, commentable, currentHeader, out)
-	}
+	return decoder
 }
 
-func handleChunkedObject(sb strings.Builder, commentable string, currentHeader string, out *os.File) {
-	content := sb.String()
-	needsCommenting := strings.Contains(strings.ToLower(content), strings.ToLower(commentable))
-
-	if needsCommenting {
-		currentHeader = "--Needed Commenting ----- " + currentHeader
+func writeChunk(c chunk, f *os.File) {
+	var toWrite strings.Builder
+	if c.shouldComment {
+		toWrite.WriteString("-- Commented by scromment ----- ")
 	}
-	_, err := out.WriteString(currentHeader)
-	check(err)
-
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	for scanner.Scan() {
-		text := scanner.Text() + "\n"
-		if needsCommenting {
-			text = "--" + text
+	toWrite.WriteString(c.header + "\n")
+	content := c.sb.String()
+	rescan := bufio.NewScanner(strings.NewReader(content))
+	for rescan.Scan() {
+		if c.shouldComment {
+			toWrite.WriteString("--")
 		}
-		_, err := out.WriteString(text)
-		check(err)
+		toWrite.WriteString(rescan.Text())
+		toWrite.WriteString("\n")
 	}
+	_, err := f.WriteString(toWrite.String())
+	check(err)
+	c.sb.Reset()
 }
 
 func check(err error) {
