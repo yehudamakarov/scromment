@@ -26,12 +26,20 @@ type chunk struct {
 	sb            *strings.Builder
 }
 
-func (c *chunk) addContent(s string, commentable string) {
-	if strings.Contains(strings.ToLower(s), strings.ToLower(commentable)) && !strings.HasPrefix(strings.TrimSpace(s), "--") {
-		c.shouldComment = true
-	}
+// if this line
+// has a commentable in it - comment it
+// is already commented, do not comment it (build up of comment characters)
+func (c *chunk) addLineToChunk(s string, commentable string) {
+	c.shouldComment = shouldWeCommentThisLine(s, commentable)
 	c.sb.WriteString(s)
 	c.sb.WriteString("\n")
+}
+
+func shouldWeCommentThisLine(s string, commentable string) bool {
+	containsCommentable := strings.Contains(strings.ToLower(s), strings.ToLower(commentable))
+	isAlreadyCommentedOut := strings.HasPrefix(strings.TrimSpace(s), "--")
+
+	return containsCommentable && isAlreadyCommentedOut
 }
 
 func editFile(file *os.File, splitter string, commentable string, out *os.File) {
@@ -46,13 +54,19 @@ func getFileContent(file *os.File) *bufio.Scanner {
 }
 
 func iterate(scanner *bufio.Scanner, splitter string, commentable string, out *os.File) {
+	// make a new chunk
 	c := chunk{sb: &strings.Builder{}}
+	// get first line
 	scanner.Scan()
 	firstLine := scanner.Text()
+	// if the first line is a splitter,
 	if strings.HasPrefix(firstLine, splitter) {
+		// this is the "header for the chunk
 		c.header = firstLine
+		// if there is no splitter on top,
 	} else {
-		c.addContent(firstLine, commentable)
+		// treat it like an average line
+		c.addLineToChunk(firstLine, commentable)
 	}
 
 	for scanner.Scan() {
@@ -61,7 +75,7 @@ func iterate(scanner *bufio.Scanner, splitter string, commentable string, out *o
 			writeChunk(c, out)
 			c = chunk{sb: &strings.Builder{}, header: line}
 		} else {
-			c.addContent(line, commentable)
+			c.addLineToChunk(line, commentable)
 		}
 	}
 
