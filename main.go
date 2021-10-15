@@ -15,7 +15,7 @@ func main() {
 	out := makeOutFile(err, outLocation)
 	defer closeFile(out)
 
-	editFile(file, splitter, commentable, out)
+	convertFile(file, splitter, commentable, out)
 }
 
 func weShouldCommentThisLine(s string, commentable string) bool {
@@ -24,7 +24,7 @@ func weShouldCommentThisLine(s string, commentable string) bool {
 	return containsCommentable && notAlreadyCommentedOut
 }
 
-func editFile(file *os.File, splitter string, commentable string, out *os.File) {
+func convertFile(file *os.File, splitter string, commentable string, out *os.File) {
 	scanner := getFileContent(file)
 	iterateAndRewrite(scanner, splitter, commentable, out)
 }
