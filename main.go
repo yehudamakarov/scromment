@@ -2,65 +2,22 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
-	"log"
 	"os"
 	"strings"
 )
 
 func main() {
-	fileLocationPtr := flag.String("file-location", "", "location of the sql file that needs to be handled")
-	outLocationPtr := flag.String("out-location", "", "location of the generated sql file (that will be commented appropriately)")
-	commentablePtr := flag.String("commentable", "", "text token that must be contained in an object for this tool to comment it out")
-	splitterPtr := flag.String("splitter", "/****** Object:", "text token that dictates when to split objects to be commented out when containing a commentable.")
+	fileLocation, outLocation, commentable, splitter := parseFLags()
 
-	flag.Parse()
+	file, err := getScriptFile(fileLocation)
+	defer closeFile(file)
 
-	fileLocation := *fileLocationPtr
-	outLocation := *outLocationPtr
-	commentable := *commentablePtr
-	splitter := *splitterPtr
+	out := makeOutFile(err, outLocation)
+	defer closeFile(out)
 
-	handleCliErrors(fileLocation, outLocation, commentable, splitter)
-
-	file, err := os.Open(fileLocation)
-	check(err)
-	defer func(file *os.File) {
-		err := file.Close()
-		check(err)
-	}(file)
-
-	out, err := os.Create(outLocation)
-	check(err)
-	defer func(out *os.File) {
-		err := out.Close()
-		check(err)
-	}(out)
-
-	rewriteFile(file, splitter, commentable, out)
-
-}
-
-func handleCliErrors(fileLocation string, outLocation string, commentable string, splitter string) {
-
-	if fileLocation == "" {
-		showErrorMessage("file-location")
-	}
-	if outLocation == "" {
-		showErrorMessage("out-location")
-	}
-	if commentable == "" {
-		showErrorMessage("commentable")
-	}
-	if splitter == "" {
-		showErrorMessage("splitter")
-	}
-}
-
-func showErrorMessage(missing string) {
-	log.Fatalf("don't forget %s!", missing)
+	editFile(file, splitter, commentable, out)
 }
 
 type chunk struct {
@@ -77,10 +34,15 @@ func (c *chunk) addContent(s string, commentable string) {
 	c.sb.WriteString("\n")
 }
 
-func rewriteFile(file *os.File, splitter string, commentable string, out *os.File) {
+func editFile(file *os.File, splitter string, commentable string, out *os.File) {
+	scanner := getFileContent(file)
+	iterate(scanner, splitter, commentable, out)
+}
+
+func getFileContent(file *os.File) *bufio.Scanner {
 	decoder := getDecoder(file)
 	scanner := bufio.NewScanner(transform.NewReader(file, decoder))
-	iterate(scanner, splitter, commentable, out)
+	return scanner
 }
 
 func iterate(scanner *bufio.Scanner, splitter string, commentable string, out *os.File) {
@@ -142,10 +104,4 @@ func writeChunk(c chunk, f *os.File) {
 	_, err := f.WriteString(toWrite.String())
 	check(err)
 	c.sb.Reset()
-}
-
-func check(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
 }
