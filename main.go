@@ -26,63 +26,48 @@ type chunk struct {
 	sb            *strings.Builder
 }
 
-// if this line
-// has a commentable in it - comment it
-// is already commented, do not comment it (build up of comment characters)
-func (c *chunk) addLineToChunk(s string, commentable string) {
-	c.shouldComment = shouldWeCommentThisLine(s, commentable)
+func (c *chunk) addCurrentLineToChunk(s string) {
 	c.sb.WriteString(s)
 	c.sb.WriteString("\n")
 }
 
-func shouldWeCommentThisLine(s string, commentable string) bool {
-	containsCommentable := strings.Contains(strings.ToLower(s), strings.ToLower(commentable))
-	isAlreadyCommentedOut := strings.HasPrefix(strings.TrimSpace(s), "--")
+func (c *chunk) weShouldCommentThisChunk() {
+	c.shouldComment = true
+}
 
-	return containsCommentable && isAlreadyCommentedOut
+func weShouldCommentThisLine(s string, commentable string) bool {
+	containsCommentable := strings.Contains(strings.ToLower(s), strings.ToLower(commentable))
+	notAlreadyCommentedOut := !strings.HasPrefix(strings.TrimSpace(s), "--")
+	return containsCommentable && notAlreadyCommentedOut
 }
 
 func editFile(file *os.File, splitter string, commentable string, out *os.File) {
 	scanner := getFileContent(file)
-	iterate(scanner, splitter, commentable, out)
+	iterateAndRewrite(scanner, splitter, commentable, out)
+}
+
+func iterateAndRewrite(scanner *bufio.Scanner, splitter string, commentable string, out *os.File) {
+	c := chunk{sb: &strings.Builder{}}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
+			c.writeChunk(out)
+			c = chunk{sb: &strings.Builder{}, header: line}
+		} else {
+			if weShouldCommentThisLine(line, commentable) {
+				c.weShouldCommentThisChunk()
+			}
+			c.addCurrentLineToChunk(line)
+		}
+	}
+	// writes contents after the last header
+	c.writeChunk(out)
 }
 
 func getFileContent(file *os.File) *bufio.Scanner {
 	decoder := getDecoder(file)
 	scanner := bufio.NewScanner(transform.NewReader(file, decoder))
 	return scanner
-}
-
-func iterate(scanner *bufio.Scanner, splitter string, commentable string, out *os.File) {
-	// make a new chunk
-	c := chunk{sb: &strings.Builder{}}
-	// get first line
-	scanner.Scan()
-	firstLine := scanner.Text()
-	// if the first line is a splitter,
-	if strings.HasPrefix(firstLine, splitter) {
-		// this is the "header for the chunk
-		c.header = firstLine
-		// if there is no splitter on top,
-	} else {
-		// treat it like an average line
-		c.addLineToChunk(firstLine, commentable)
-	}
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if encounteredHeader := strings.HasPrefix(line, splitter); encounteredHeader {
-			writeChunk(c, out)
-			c = chunk{sb: &strings.Builder{}, header: line}
-		} else {
-			c.addLineToChunk(line, commentable)
-		}
-	}
-
-	// write contents after last header
-	if c.sb.Len() > 0 {
-		writeChunk(c, out)
-	}
 }
 
 func getDecoder(file *os.File) transform.Transformer {
@@ -100,12 +85,19 @@ func getDecoder(file *os.File) transform.Transformer {
 	return decoder
 }
 
-func writeChunk(c chunk, f *os.File) {
+func (c *chunk) writeChunk(f *os.File) {
+	if c.sb.Len() == 0 {
+		return
+	}
 	var toWrite strings.Builder
+
+	// prep header
 	if c.shouldComment {
-		toWrite.WriteString("-- Commented by scromment ----- ")
+		toWrite.WriteString("-- Commented by scromment ----- \n")
 	}
 	toWrite.WriteString(c.header + "\n")
+
+	// prep body
 	content := c.sb.String()
 	rescan := bufio.NewScanner(strings.NewReader(content))
 	for rescan.Scan() {
@@ -115,7 +107,8 @@ func writeChunk(c chunk, f *os.File) {
 		toWrite.WriteString(rescan.Text())
 		toWrite.WriteString("\n")
 	}
+
+	// write
 	_, err := f.WriteString(toWrite.String())
 	check(err)
-	c.sb.Reset()
 }
