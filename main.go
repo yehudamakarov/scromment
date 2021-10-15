@@ -20,21 +20,6 @@ func main() {
 	editFile(file, splitter, commentable, out)
 }
 
-type chunk struct {
-	shouldComment bool
-	header        string
-	sb            *strings.Builder
-}
-
-func (c *chunk) addCurrentLineToChunk(s string) {
-	c.sb.WriteString(s)
-	c.sb.WriteString("\n")
-}
-
-func (c *chunk) weShouldCommentThisChunk() {
-	c.shouldComment = true
-}
-
 func weShouldCommentThisLine(s string, commentable string) bool {
 	containsCommentable := strings.Contains(strings.ToLower(s), strings.ToLower(commentable))
 	notAlreadyCommentedOut := !strings.HasPrefix(strings.TrimSpace(s), "--")
@@ -83,32 +68,4 @@ func getDecoder(file *os.File) transform.Transformer {
 	_, err = file.Seek(0, 0)
 	check(err)
 	return decoder
-}
-
-func (c *chunk) writeChunk(f *os.File) {
-	if c.sb.Len() == 0 {
-		return
-	}
-	var toWrite strings.Builder
-
-	// prep header
-	if c.shouldComment {
-		toWrite.WriteString("-- Commented by scromment ----- \n")
-	}
-	toWrite.WriteString(c.header + "\n")
-
-	// prep body
-	content := c.sb.String()
-	rescan := bufio.NewScanner(strings.NewReader(content))
-	for rescan.Scan() {
-		if c.shouldComment {
-			toWrite.WriteString("--")
-		}
-		toWrite.WriteString(rescan.Text())
-		toWrite.WriteString("\n")
-	}
-
-	// write
-	_, err := f.WriteString(toWrite.String())
-	check(err)
 }
