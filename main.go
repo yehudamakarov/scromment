@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	fileLocation, outLocation, commentables, splitter := parseFLags()
+	fileLocation, outLocation, commentables, splitter := parseFlags()
 
 	file, err := getScriptFile(fileLocation)
 	defer closeFile(file)
@@ -18,9 +18,9 @@ func main() {
 	convertFile(file, splitter, commentables, out)
 }
 
-func convertFile(file *os.File, splitter string, commentable []string, out *os.File) {
+func convertFile(file *os.File, splitter string, commentables []string, out *os.File) {
 	scanner := getFileContent(file)
-	iterateAndRewrite(scanner, splitter, commentable, out)
+	iterateAndRewrite(scanner, splitter, commentables, out)
 }
 
 func iterateAndRewrite(scanner *bufio.Scanner, splitter string, commentable []string, out *os.File) {
@@ -33,11 +33,12 @@ func iterateAndRewrite(scanner *bufio.Scanner, splitter string, commentable []st
 		} else {
 			if weShouldCommentThisLine(line, commentable) {
 				c.weShouldCommentThisChunk()
+
 			}
 			c.addCurrentLineToChunk(line)
 		}
 	}
-	// writes contents after the last header
+	// writes content after the last header
 	c.writeChunk(out)
 }
 

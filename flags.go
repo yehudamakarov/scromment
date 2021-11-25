@@ -32,7 +32,7 @@ func check(err error) {
 	}
 }
 
-func parseFLags() (string, string, []string, string) {
+func parseFlags() (string, string, []string, string) {
 	fileLocationPtr := flag.String("file-location", "", "location of the sql file that needs to be handled")
 	outLocationPtr := flag.String("out-location", "", "location of the generated sql file (that will be commented appropriately)")
 	commentablePtr := flag.String("commentable", "", "text token(s) that must be contained in an object for this tool to comment it out. (1 token - pass a string, 2 or more tokens - pass a pipe (|) delimited string)")
